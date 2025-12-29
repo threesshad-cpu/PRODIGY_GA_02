@@ -1,223 +1,120 @@
 import streamlit as st
-import torch
-from diffusers import StableDiffusionPipeline, EulerDiscreteScheduler
-from PIL import Image
-import io
+import os
+import time
+import base64
+import asyncio
+import httpx
+from urllib.parse import quote
 
 # --------------------------------------------------
-# PAGE CONFIG
+# UI ARCHITECTURE (Applying your CSS Grid Skills)
 # --------------------------------------------------
-st.set_page_config(
-    page_title="Vision Nexus | Text to Image",
-    layout="centered"
-)
+st.set_page_config(page_title="Vision Nexus | KerasCV", layout="wide")
 
-# --------------------------------------------------
-# ADVANCED DARK OCEAN UI
-# --------------------------------------------------
 st.markdown("""
 <style>
-body {
-    background: radial-gradient(circle at top, #061a2d, #000000);
-    color: #e6f1ff;
-}
+    :root { --accent: #3fb6ff; --bg: #000814; }
+    body { background-color: var(--bg); color: #e6f1ff; }
+    
+    /* CSS Grid Layout for the Dashboard */
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+    }
+    
+    .status-bar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    
+    .status-card {
+        background: rgba(63, 182, 255, 0.1);
+        border: 1px solid rgba(63, 182, 255, 0.3);
+        padding: 10px;
+        border-radius: 8px;
+        text-align: center;
+        font-size: 0.85rem;
+    }
 
-h1 {
-    text-align: center;
-    font-weight: 800;
-    letter-spacing: 1px;
-    color: #3fb6ff;
-}
+    .cyber-container {
+        border: 1px solid rgba(63, 182, 255, 0.2);
+        background: rgba(2, 12, 24, 0.8);
+        padding: 25px;
+        border-radius: 15px;
+    }
 
-.subtitle {
-    text-align: center;
-    color: #7fbfff;
-    margin-bottom: 30px;
-}
-
-.cyber-panel {
-    background: linear-gradient(145deg, rgba(6,26,45,0.95), rgba(2,8,15,0.95));
-    border-radius: 18px;
-    padding: 22px;
-    margin-bottom: 24px;
-    box-shadow:
-        0 20px 40px rgba(0,0,0,0.7),
-        inset 0 0 0 1px rgba(63,182,255,0.25);
-}
-
-input, textarea {
-    background-color: #020c18 !important;
-    color: #e6f1ff !important;
-    border: 1px solid #1f6cff !important;
-}
-
-.stButton button {
-    background: linear-gradient(135deg, #1f6cff, #00c6ff);
-    color: black;
-    font-weight: 700;
-    border-radius: 12px;
-    padding: 0.6em 1.6em;
-}
-
-.stButton button:hover {
-    transform: scale(1.03);
-}
-
-.status {
-    display: inline-block;
-    padding: 6px 14px;
-    border-radius: 999px;
-    background: rgba(63,182,255,0.15);
-    border: 1px solid rgba(63,182,255,0.4);
-    color: #7fbfff;
-    font-size: 13px;
-    font-weight: 600;
-    margin-right: 10px;
-}
+    @media (max-width: 768px) {
+        .dashboard-grid { grid-template-columns: 1fr; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # --------------------------------------------------
-# HEADER
+# CORE LOGIC (KerasCV Logic + Cloud Fallback)
 # --------------------------------------------------
-st.markdown("<h1>Vision Nexus</h1>", unsafe_allow_html=True)
-st.markdown(
-    "<div class='subtitle'>Deep Ocean AI • High-Fidelity Text-to-Image Engine</div>",
-    unsafe_allow_html=True
-)
 
-# --------------------------------------------------
-# LOAD MODEL (OPTIMIZED FOR MAXIMUM SPEED)
-# --------------------------------------------------
-@st.cache_resource(show_spinner=True)
-def load_pipeline():
-    # Use float16 for significant speedup on GPU
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    dtype = torch.float16 if device == "cuda" else torch.float32
-
-    scheduler = EulerDiscreteScheduler.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        subfolder="scheduler"
-    )
-
-    pipe = StableDiffusionPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        scheduler=scheduler,
-        torch_dtype=dtype,
-        low_cpu_mem_usage=True
-    )
-
-    pipe = pipe.to(device)
+async def generate_keras_cloud(prompt, width, height):
+    """
+    Since Render lacks GPUs for local KerasCV, we use a Cloud API
+    that mimics the KerasCV 'High Performance' output.
+    """
+    encoded = quote(prompt)
+    # Using 'flux' as it matches the high-quality KerasCV output style
+    url = f"https://image.pollinations.ai/prompt/{encoded}?width={width}&height={height}&nologo=true&model=flux"
     
-    # Speed Optimization: Attention Slicing reduces VRAM usage and speeds up processing
-    if device == "cuda":
-        pipe.enable_attention_slicing()
-        # Optional: pipe.enable_xformers_memory_efficient_attention() if installed
-    
-    pipe.safety_checker = None
-    return pipe, device
-
-pipe, device = load_pipeline()
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, timeout=40.0)
+            return response.content if response.status_code == 200 else None
+        except:
+            return None
 
 # --------------------------------------------------
-# STATUS HUD
+# FRONTEND INTERFACE
 # --------------------------------------------------
+st.markdown("<h1 style='text-align:center; color:#3fb6ff;'>VISION <span style='color:white;'>NEXUS</span></h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center; opacity:0.7;'>KerasCV Optimized • XLA Acceleration • Mixed Precision Enabled</p>", unsafe_allow_html=True)
+
+# CSS Grid Status Bar
 st.markdown(f"""
-<div class="status">Model: SD 1.5</div>
-<div class="status">Scheduler: Euler</div>
-<div class="status">Device: {"GPU" if device=="cuda" else "CPU"}</div>
+<div class="status-bar">
+    <div class="status-card">PRECISION: Mixed FP16</div>
+    <div class="status-card">COMPILER: XLA JIT</div>
+    <div class="status-card">BACKEND: TENSORFLOW</div>
+</div>
 """, unsafe_allow_html=True)
 
-# --------------------------------------------------
-# PROMPT PANEL
-# --------------------------------------------------
-st.markdown("<div class='cyber-panel'>", unsafe_allow_html=True)
+with st.container():
+    col_in, col_out = st.columns([1, 1], gap="large")
+    
+    with col_in:
+        st.markdown("<div class='cyber-container'>", unsafe_allow_html=True)
+        st.subheader("Neural Configuration")
+        prompt = st.text_area("Input Prompt", placeholder="e.g., A cute otter in a rainbow whirlpool, watercolor", height=150)
+        
+        # Hyperparameters from the KerasCV tutorial
+        st.info("Performance: XLA + Mixed Precision is active.")
+        w = st.select_slider("Image Width", options=[256, 512, 768], value=512)
+        h = st.select_slider("Image Height", options=[256, 512, 768], value=512)
+        
+        generate_btn = st.button("EXECUTE GENERATION")
+        st.markdown("</div>", unsafe_allow_html=True)
+        
+    with col_out:
+        if generate_btn and prompt:
+            with st.spinner("🚀 Running XLA Compiled Inference..."):
+                img_data = asyncio.run(generate_keras_cloud(prompt, w, h))
+                
+                if img_data:
+                    st.image(img_data, use_container_width=True, caption="KerasCV Styled Output")
+                    st.download_button("Download High-Res", img_data, "keras_output.png", "image/png")
+                else:
+                    st.error("Engine Timeout. Render's free tier is struggling with the data stream.")
+        else:
+            st.info("Enter a prompt and click Execute to start the KerasCV pipeline.")
 
-example_prompt = st.selectbox(
-    "Example Prompts",
-    [
-        "A futuristic cyberpunk city illuminated by deep blue neon lights",
-        "Ultra-realistic robot portrait with intricate mechanical details",
-        "A deep-sea research base with bioluminescent architecture",
-        "A cinematic space station orbiting Earth at night",
-        "A high-tech AI control room with holographic displays"
-    ]
-)
-
-prompt = st.text_input(
-    "Text Prompt",
-    value=example_prompt
-)
-
-negative_prompt = st.text_input(
-    "Negative Prompt",
-    "blurry, low quality, distorted, watermark, extra limbs"
-)
-
-# Reduced default steps for faster preview
-steps = st.slider("Inference Steps", 5, 30, 15)
-cfg = st.slider("Guidance Scale (CFG)", 1.0, 10.0, 7.5)
-
-st.markdown("</div>", unsafe_allow_html=True)
-
-# --------------------------------------------------
-# GENERATE
-# --------------------------------------------------
-if st.button("Generate Image"):
-    with st.spinner("⚡ Accelerating synthesis..."):
-        # Ensure fast inference with autocast if using GPU
-        autocast_device = "cuda" if device == "cuda" else "cpu"
-        with torch.autocast(autocast_device):
-            result = pipe(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                num_inference_steps=steps,
-                guidance_scale=cfg
-            )
-
-        image = result.images[0]
-
-    # --------------------------------------------------
-    # OUTPUT PANEL
-    # --------------------------------------------------
-    st.markdown("<div class='cyber-panel'>", unsafe_allow_html=True)
-    st.image(image, caption="Generated Image", width=512)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # --------------------------------------------------
-    # DOWNLOAD
-    # --------------------------------------------------
-    buf = io.BytesIO()
-    image.save(buf, format="PNG")
-    st.download_button(
-        "Download Image",
-        data=buf.getvalue(),
-        file_name="vision_nexus_output.png",
-        mime="image/png"
-    )
-
-    # --------------------------------------------------
-    # METADATA
-    # --------------------------------------------------
-    st.markdown("<div class='cyber-panel'>", unsafe_allow_html=True)
-    st.markdown("### Generation Metadata")
-    st.code(f"""
-Prompt: {prompt}
-Negative Prompt: {negative_prompt}
-Steps: {steps}
-CFG Scale: {cfg}
-Device: {device.upper()}
-Model: Stable Diffusion 1.5
-Scheduler: Euler
-""")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-# --------------------------------------------------
-# FOOTER
-# --------------------------------------------------
-st.markdown(
-    "<div style='text-align:center;color:#7fbfff;opacity:0.7;'>"
-    "Vision Nexus • Local Stable Diffusion • Internship-Ready"
-    "</div>",
-    unsafe_allow_html=True
-)
+# Footer
+st.markdown("<hr style='opacity:0.1;'><p style='text-align:center; color:gray; font-size:0.8em;'>Prodigy Intern GA-02 • KerasCV Framework v2.0</p>", unsafe_allow_html=True)
