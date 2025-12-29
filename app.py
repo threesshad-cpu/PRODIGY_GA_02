@@ -1,19 +1,29 @@
 import streamlit as st
-import torch
-from diffusers import StableDiffusionPipeline, EulerDiscreteScheduler
-from PIL import Image
+import os
+import httpx
+import asyncio
+import time
+from urllib.parse import quote
 import io
 
 # --------------------------------------------------
 # PAGE CONFIG
 # --------------------------------------------------
 st.set_page_config(
-    page_title="Vision Nexus | Text to Image",
+    page_title="Vision Nexus | Instant AI Art",
     layout="centered"
 )
 
+# --- API Configuration ---
+# Fetching Gemini Key for Prompt Enhancement (Optional/Free Tier)
+if "API_KEY" not in st.session_state:
+    try:
+        st.session_state.API_KEY = st.secrets.get("VITE_GEMINI_API_KEY") or os.environ.get("VITE_GEMINI_API_KEY")
+    except Exception:
+        st.session_state.API_KEY = os.environ.get("VITE_GEMINI_API_KEY", "")
+
 # --------------------------------------------------
-# ADVANCED DARK OCEAN UI
+# ADVANCED DARK OCEAN UI (CSS Grid & Modern Styling)
 # --------------------------------------------------
 st.markdown("""
 <style>
@@ -56,23 +66,32 @@ input, textarea {
     color: black;
     font-weight: 700;
     border-radius: 12px;
-    padding: 0.6em 1.6em;
+    width: 100%;
+    padding: 0.8em;
+    transition: 0.3s;
 }
 
 .stButton button:hover {
-    transform: scale(1.03);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(31, 108, 255, 0.4);
 }
 
-.status {
-    display: inline-block;
-    padding: 6px 14px;
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.status-item {
+    padding: 8px 14px;
     border-radius: 999px;
-    background: rgba(63,182,255,0.15);
-    border: 1px solid rgba(63,182,255,0.4);
+    background: rgba(63,182,255,0.1);
+    border: 1px solid rgba(63,182,255,0.3);
     color: #7fbfff;
-    font-size: 13px;
+    font-size: 12px;
+    text-align: center;
     font-weight: 600;
-    margin-right: 10px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -82,40 +101,52 @@ input, textarea {
 # --------------------------------------------------
 st.markdown("<h1>Vision Nexus</h1>", unsafe_allow_html=True)
 st.markdown(
-    "<div class='subtitle'>Deep Ocean AI • High-Fidelity Text-to-Image Engine</div>",
+    "<div class='subtitle'>Instant Cloud AI • High-Speed Synthesis Engine</div>",
     unsafe_allow_html=True
 )
 
 # --------------------------------------------------
-# LOAD MODEL (CACHED & FAST)
+# HELPER FUNCTIONS (API DRIVEN)
 # --------------------------------------------------
-@st.cache_resource(show_spinner=True)
-def load_pipeline():
-    scheduler = EulerDiscreteScheduler.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        subfolder="scheduler"
-    )
+async def enhance_prompt(client, user_input: str):
+    """Uses Gemini to expand the prompt for cinematic results."""
+    api_key = st.session_state.get("API_KEY")
+    if not api_key: return user_input # Fallback to original if no key
+        
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key={api_key}"
+    payload = {
+        "contents": [{"parts": [{"text": f"Act as an AI artist. Expand this prompt for a cinematic image: {user_input}"}]}],
+        "systemInstruction": {"parts": [{"text": "Output only the expanded prompt text."}]}
+    }
+    try:
+        response = await client.post(url, json=payload, timeout=10.0)
+        return response.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+    except:
+        return user_input
 
-    pipe = StableDiffusionPipeline.from_pretrained(
-        "runwayml/stable-diffusion-v1-5",
-        scheduler=scheduler,
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32
-    )
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    pipe = pipe.to(device)
-    pipe.safety_checker = None
-    return pipe, device
-
-pipe, device = load_pipeline()
+async def generate_cloud_image(client, prompt: str, model="turbo"):
+    """Fetches image from Pollinations.ai (Free & Instant)."""
+    encoded = quote(prompt)
+    seed = int(time.time())
+    # Turbo model is optimized for sub-second responses
+    url = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&seed={seed}&nologo=true&model={model}"
+    try:
+        response = await client.get(url, timeout=30.0, follow_redirects=True)
+        if response.status_code == 200:
+            return response.content
+        return None
+    except:
+        return None
 
 # --------------------------------------------------
-# STATUS HUD
+# STATUS HUD (CSS GRID)
 # --------------------------------------------------
 st.markdown(f"""
-<div class="status">Model: SD 1.5</div>
-<div class="status">Scheduler: Euler</div>
-<div class="status">Device: {"GPU" if device=="cuda" else "CPU"}</div>
+<div class="status-grid">
+    <div class="status-item">Engine: Pollinations</div>
+    <div class="status-item">Model: Turbo-Instant</div>
+    <div class="status-item">Mode: Cloud Hybrid</div>
+</div>
 """, unsafe_allow_html=True)
 
 # --------------------------------------------------
@@ -123,80 +154,56 @@ st.markdown(f"""
 # --------------------------------------------------
 st.markdown("<div class='cyber-panel'>", unsafe_allow_html=True)
 
-example_prompt = st.selectbox(
-    "Example Prompts",
-    [
-        "A futuristic cyberpunk city illuminated by deep blue neon lights",
-        "Ultra-realistic robot portrait with glowing blue eyes",
-        "A deep-sea research base with bioluminescent architecture",
-        "A cinematic space station orbiting Earth at night",
-        "A high-tech AI control room with holographic displays"
-    ]
-)
+user_input = st.text_area("What should the AI visualize?", placeholder="e.g. A cyberpunk library in a deep blue ocean...")
+auto_enhance = st.checkbox("AI Prompt Enhancement (Requires Gemini Key)", value=True)
+model_choice = st.selectbox("Vision Engine", ["turbo", "flux"])
 
-prompt = st.text_input(
-    "Text Prompt",
-    value=example_prompt
-)
+if st.button("Generate Artwork"):
+    if not user_input:
+        st.warning("Please enter a prompt first.")
+    else:
+        async def process():
+            async with httpx.AsyncClient() as client:
+                start_time = time.time()
+                
+                # Step 1: Enhance (Gemini is fast)
+                final_prompt = user_input
+                if auto_enhance and st.session_state.API_KEY:
+                    with st.spinner("🧠 Brainstorming details..."):
+                        final_prompt = await enhance_prompt(client, user_input)
+                
+                # Step 2: Generate (Cloud API is instant)
+                with st.spinner("⚡ Synthesizing pixels..."):
+                    img_bytes = await generate_cloud_image(client, final_prompt, model_choice)
+                
+                if img_bytes:
+                    elapsed = round(time.time() - start_time, 2)
+                    st.session_state.last_image = img_bytes
+                    st.session_state.last_elapsed = elapsed
+                    st.session_state.last_prompt = final_prompt
+                else:
+                    st.error("Engine busy. Please try again.")
 
-negative_prompt = st.text_input(
-    "Negative Prompt",
-    "blurry, low quality, distorted, watermark, extra limbs"
-)
-
-steps = st.slider("Inference Steps", 15, 30, 20)
-cfg = st.slider("Guidance Scale (CFG)", 5.0, 10.0, 7.5)
+        asyncio.run(process())
 
 st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------------------------------
-# GENERATE
+# OUTPUT PANEL
 # --------------------------------------------------
-if st.button("Generate Image"):
-    with st.spinner("Synthesizing image..."):
-        with torch.no_grad():
-            result = pipe(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                num_inference_steps=steps,
-                guidance_scale=cfg
-            )
-
-        image = result.images[0]
-
-    # --------------------------------------------------
-    # OUTPUT PANEL
-    # --------------------------------------------------
+if "last_image" in st.session_state:
     st.markdown("<div class='cyber-panel'>", unsafe_allow_html=True)
-    st.image(image, caption="Generated Image", width=512)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # --------------------------------------------------
-    # DOWNLOAD
-    # --------------------------------------------------
-    buf = io.BytesIO()
-    image.save(buf, format="PNG")
+    st.image(st.session_state.last_image, caption=f"Generated in {st.session_state.last_elapsed}s", use_container_width=True)
+    
     st.download_button(
-        "Download Image",
-        data=buf.getvalue(),
-        file_name="vision_nexus_output.png",
+        "Download Masterpiece",
+        data=st.session_state.last_image,
+        file_name="vision_nexus_instant.png",
         mime="image/png"
     )
-
-    # --------------------------------------------------
-    # METADATA
-    # --------------------------------------------------
-    st.markdown("<div class='cyber-panel'>", unsafe_allow_html=True)
-    st.markdown("### Generation Metadata")
-    st.code(f"""
-Prompt: {prompt}
-Negative Prompt: {negative_prompt}
-Steps: {steps}
-CFG Scale: {cfg}
-Device: {device.upper()}
-Model: Stable Diffusion 1.5
-Scheduler: Euler
-""")
+    
+    with st.expander("View Engineering Metadata"):
+        st.code(st.session_state.last_prompt)
     st.markdown("</div>", unsafe_allow_html=True)
 
 # --------------------------------------------------
@@ -204,7 +211,7 @@ Scheduler: Euler
 # --------------------------------------------------
 st.markdown(
     "<div style='text-align:center;color:#7fbfff;opacity:0.7;'>"
-    "Vision Nexus • Local Stable Diffusion • Internship-Ready"
+    "Vision Nexus • Instant Cloud Hybrid • Prodigy WD-02"
     "</div>",
     unsafe_allow_html=True
 )
