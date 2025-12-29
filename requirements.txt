@@ -2,6 +2,3 @@ streamlit
 httpx
 pillow
 torch
-diffusers
-transformers
-accelerate
