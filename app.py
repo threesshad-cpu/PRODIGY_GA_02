@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import streamlit as st
 import torch
 from diffusers import StableDiffusionPipeline, EulerDiscreteScheduler
@@ -209,7 +208,6 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
-=======
 import streamlit as st
 import torch
 from diffusers import StableDiffusionPipeline, EulerDiscreteScheduler
@@ -420,4 +418,3 @@ st.markdown(
     "</div>",
     unsafe_allow_html=True
 )
->>>>>>> 5590ad48905980aa38c6f8bbb36cfe2bf3ecceaa
