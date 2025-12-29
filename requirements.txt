@@ -1,3 +1,6 @@
 streamlit
-httpx
-pillow
+diffusers
+transformers
+accelerate
+torch
+xformers
