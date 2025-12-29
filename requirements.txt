@@ -3,3 +3,4 @@ httpx
 pillow
 torch
 diffusers
+transformers
