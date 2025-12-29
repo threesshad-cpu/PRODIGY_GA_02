@@ -1,10 +1,11 @@
-streamlit
-torch==2.1.0+cpu
-torchvision==0.16.0+cpu
-torchaudio==2.1.0+cpu
+streamlit==1.31.1
+torch==2.1.2+cpu
+torchvision==0.16.2+cpu
 --extra-index-url https://download.pytorch.org/whl/cpu
 
-diffusers
-transformers
-accelerate
-pillow
+diffusers==0.25.0
+transformers==4.36.2
+accelerate==0.25.0
+safetensors==0.4.2
+Pillow==10.2.0
+numpy==1.26.4
