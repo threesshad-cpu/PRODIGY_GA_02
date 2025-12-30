@@ -107,7 +107,7 @@ pip install -r requirements.txt
 ```bash
 streamlit run main.py
 ```
-### ☁️ Cloud Deployment Note
+### ☁️ Cloud Deployment Link: https://py-genai-2.streamlit.app/
 The application is optimized for:
 **Streamlit Cloud**,
 **Render*8
@@ -121,3 +121,4 @@ If the daily API quota is reached, the system enters a rest cycle until the next
 * **Role:** Generative AI Intern
 * **Organization:** Prodigy InfoTech
 * **Project ID:** PRODIGY_GA_02
+
