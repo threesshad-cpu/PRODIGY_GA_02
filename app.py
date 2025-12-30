@@ -39,13 +39,6 @@ st.markdown("""
         font-size: 0.85rem;
     }
 
-    .cyber-container {
-        border: 1px solid rgba(63, 182, 255, 0.2);
-        background: rgba(2, 12, 24, 0.8);
-        padding: 25px;
-        border-radius: 15px;
-    }
-
     @media (max-width: 768px) {
         .dashboard-grid { grid-template-columns: 1fr; }
     }
